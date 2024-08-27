@@ -3,5 +3,12 @@ This is an automatic full segmentation  tool based on [Segment-Anything-2](https
 
 
 ## Demo
-https://github.com/user-attachments/assets/9501f584-9148-4971-b11f-fd4acb211d2c
+https://github.com/user-attachments/assets/cfc71c45-7d12-410a-8668-f290c260511e
+
+
+https://github.com/user-attachments/assets/cb942b7a-1960-41e7-8143-71d37fab89b1
+
+https://github.com/user-attachments/assets/1135813a-6d21-4dde-ab37-46bde32bd971
+
+
 ## Environment Setup
