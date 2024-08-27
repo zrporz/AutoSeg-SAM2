@@ -3,5 +3,5 @@ This is an automatic full segmentation  tool based on [Segment-Anything-2](https
 
 
 ## Demo
-[dog](https://github.com/zrporz/AutoSeg-SAM2/releases/tag/dog)
+https://github.com/user-attachments/assets/9501f584-9148-4971-b11f-fd4acb211d2c
 ## Environment Setup
