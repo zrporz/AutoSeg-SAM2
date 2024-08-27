@@ -3,12 +3,6 @@ This is an automatic full segmentation  tool based on [Segment-Anything-2](https
 
 
 ## Demo
-<!-- <video controls src= -->
-https://github.com/zrporz/AutoSeg-SAM2/blob/main/assets/chickenchicken.mp4 
-<!-- title="assets/chickenchicken.mp4"></video> -->
-
-<video controls src="https://github.com/zrporz/AutoSeg-SAM2/blob/main/assets/dog.mp4" title="assets/chickenchicken.mp4"></video>
-
-<video controls src="https://github.com/zrporz/AutoSeg-SAM2/blob/main/assets/seaanimal.mp4" title="assets/seaanimal.mp4"></video>
+https://github.com/zrporz/AutoSeg-SAM2/issues/1
 
 ## Environment Setup
