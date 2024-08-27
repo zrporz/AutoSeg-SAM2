@@ -1,0 +1,9 @@
+[submodule "submoudle/segment-anything"]
+	path = submoudle/segment-anything
+	url = https://github.com/minghanqin/segment-anything-langsplat.git
+[submodule "submoudle/segment-anything-1"]
+	path = submoudle/segment-anything-1
+	url = https://github.com/minghanqin/segment-anything-langsplat.git
+[submodule "submoudle/segment-anything-2"]
+	path = submoudle/segment-anything-2
+	url = https://github.com/facebookresearch/segment-anything-2.git
