@@ -7,6 +7,7 @@ from tqdm import tqdm
 from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 import cv2
 import argparse
+from loguru import logger
 
 # use bfloat16 for the entire notebook
 torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
@@ -213,34 +214,6 @@ def sample_points(masks, enlarge_bbox,positive_num=1,negtive_num=40):
 
     return output_points
 
-# def find_high_overlap_masks(masks,ratio=0.8, only_mask=False):
-#     r_masks_dict = {}
-#     if only_mask:
-#          for i in range(len(masks)):
-#             for j in range(i+1,len(masks)):
-#                 interct_area = (masks[i]*masks[j]).sum()
-#                 if  masks[i].sum()!=0 and interct_area / masks[i].sum() > ratio:  # i 几乎包含于 j
-#                     if j not in r_masks_dict:
-#                         r_masks_dict[j] = []
-#                     r_masks_dict[j].append(i)
-#                 if  masks[j].sum()!=0 and interct_area / masks[j].sum() > ratio:  # j 几乎包含于 i
-#                     if i not in r_masks_dict:
-#                         r_masks_dict[i] = []
-#                     r_masks_dict[i].append(j)
-#     else:
-#         for i in range(len(masks)):
-#             for j in range(i+1,len(masks)):
-#                 interct_area = (masks[i]['segmentation']*masks[j]['segmentation']).sum()
-#                 if  interct_area / masks[i]['area'] > ratio:  # i 几乎包含于 j
-#                     if j not in r_masks_dict:
-#                         r_masks_dict[j] = []
-#                     r_masks_dict[j].append(i)
-#                 if  interct_area / masks[j]['area'] > ratio:  # j 几乎包含于 i
-#                     if i not in r_masks_dict:
-#                         r_masks_dict[i] = []
-#                     r_masks_dict[i].append(j)
-#     return r_masks_dict
-
 def sample_points_from_mask(mask):
     # 获取所有True值的索引
     true_indices = np.argwhere(mask)
@@ -271,10 +244,10 @@ def search_new_obj(masks_from_prev, mask_list,other_masks_list=None,mask_ratio_t
     
     for mask in new_mask_list:
         mask_none &= ~mask['segmentation']
-    print(len(new_mask_list))
+    logger.info(len(new_mask_list))
     # import ipdb; ipdb.set_trace()
-    print("now ratio:",mask_none.sum() / (mask_none.shape[0] * mask_none.shape[1]) )
-    print("expected ratios:",mask_ratio_thresh)
+    logger.info("now ratio:",mask_none.sum() / (mask_none.shape[0] * mask_none.shape[1]) )
+    logger.info("expected ratios:",mask_ratio_thresh)
     if other_masks_list is not None:
         for mask in other_masks_list:
             if mask_none.sum() / (mask_none.shape[0] * mask_none.shape[1]) > mask_ratio_thresh: # 还有很多的空隙，大于当前 thresh
@@ -284,7 +257,7 @@ def search_new_obj(masks_from_prev, mask_list,other_masks_list=None,mask_ratio_t
                     mask_none &= ~seg
             else:
                 break
-    print(len(new_mask_list))
+    logger.info(len(new_mask_list))
 
     return new_mask_list
 
@@ -317,12 +290,22 @@ class Prompts:
         self.batch_size = bs
         self.prompts = {}
         self.obj_list = []
+        self.key_frame_list = []
+        self.key_frame_obj_begin_list = []
 
     def add(self,obj_id,frame_id,mask):
         if obj_id not in self.obj_list:
+            new_obj = True
             self.prompts[obj_id] = []
+            self.obj_list.append(obj_id)
+        else:
+            new_obj = False
         self.prompts[obj_id].append((frame_id,mask))
-        self.obj_list.append(obj_id)
+        if frame_id not in self.key_frame_list and new_obj:
+            # import ipdb; ipdb.set_trace()
+            self.key_frame_list.append(frame_id)
+            self.key_frame_obj_begin_list.append(obj_id)
+            logger.info("key_frame_obj_begin_list:",self.key_frame_obj_begin_list)
     
     def get_obj_num(self):
         return len(self.obj_list)
@@ -334,21 +317,37 @@ class Prompts:
             return len(self.obj_list) // self.batch_size +1
     
     def __iter__(self):
-        self.batch_index = 0
+        # self.batch_index = 0
+        self.start_idx = 0
+        self.iter_frameindex = 0
         return self
 
     def __next__(self):
-        if self.batch_index * self.batch_size < len(self.obj_list):
-            start_idx = self.batch_index * self.batch_size
-            end_idx = min(start_idx + self.batch_size, len(self.obj_list))
-            batch_keys = self.obj_list[start_idx:end_idx]
+        if self.start_idx < len(self.obj_list):
+            if self.iter_frameindex == len(self.key_frame_list)-1:
+                end_idx = min(self.start_idx+self.batch_size, len(self.obj_list))
+            else:
+                if self.start_idx+self.batch_size < self.key_frame_obj_begin_list[self.iter_frameindex+1]:
+                    end_idx = self.start_idx+self.batch_size
+                else:
+                    end_idx =  self.key_frame_obj_begin_list[self.iter_frameindex+1]
+                    self.iter_frameindex+=1
+                # end_idx = min(self.start_idx+self.batch_size, self.key_frame_obj_begin_list[self.iter_frameindex+1])
+            batch_keys = self.obj_list[self.start_idx:end_idx]
             batch_prompts = {key: self.prompts[key] for key in batch_keys}
-            self.batch_index += 1
+            self.start_idx = end_idx
             return batch_prompts
+        # if self.batch_index * self.batch_size < len(self.obj_list):
+        #     start_idx = self.batch_index * self.batch_size
+        #     end_idx = min(start_idx + self.batch_size, len(self.obj_list))
+        #     batch_keys = self.obj_list[start_idx:end_idx]
+        #     batch_prompts = {key: self.prompts[key] for key in batch_keys}
+        #     self.batch_index += 1
+        #     return batch_prompts
         else:
             raise StopIteration
         
-def get_video_segments(prompts_loader,predictor,inference_state):
+def get_video_segments(prompts_loader,predictor,inference_state,final_output=False):
 
     video_segments = {}
     for batch_prompts in tqdm(prompts_loader,desc="processing prompts\n"):
@@ -362,11 +361,17 @@ def get_video_segments(prompts_loader,predictor,inference_state):
                     obj_id=id,
                     mask=prompt[1]
                 )
+        # start_frame_idx = 0 if final_output else None
         for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state):
             if out_frame_idx not in video_segments:
                 video_segments[out_frame_idx] = { }
             for i, out_obj_id in enumerate(out_obj_ids):
                 video_segments[out_frame_idx][out_obj_id]= (out_mask_logits[i] > 0.0).cpu().numpy()
+        
+        if final_output:
+            for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state,reverse=True):
+                for i, out_obj_id in enumerate(out_obj_ids):
+                    video_segments[out_frame_idx][out_obj_id]= (out_mask_logits[i] > 0.0).cpu().numpy()
     return video_segments
 
 if __name__ == '__main__':
@@ -377,27 +382,33 @@ if __name__ == '__main__':
     parser.add_argument("--batch_size",type=int,default=20)
     parser.add_argument("--detect_stride",type=int,default=10)
     parser.add_argument("--use_other_level",type=int,default=1)
+    parser.add_argument("--postnms",type=int,default=1)
+    parser.add_argument("--pred_iou_thresh",type=float,default=0.7)
+    parser.add_argument("--box_nms_thresh",type=float,default=0.7)
+    parser.add_argument("--stability_score_thresh",type=float,default=0.85)
     args = parser.parse_args()
+    logger.add(os.path.join(args.output_dir,f'{args.level}.log'), rotation="500 MB")
+    logger.info(args)
     video_dir = args.video_path
     level = args.level
     base_dir = args.output_dir
 
     ##### load Sam2 and Sam1 Model #####
-    sam2_checkpoint = "../checkpoints/sam2_hiera_large.pt"
+    sam2_checkpoint = "./checkpoints/sam2/sam2_hiera_large.pt"
     model_cfg = "sam2_hiera_l.yaml"
 
     predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint)
 
     sam2 = build_sam2(model_cfg, sam2_checkpoint, device ='cuda', apply_postprocessing=False)
 
-    sam_ckpt_path="/n/holylfs05/LABS/pfister_lab/Lab/coxfs01/pfister_lab2/Lab/zhourenping/workspace/LangSplat-4D/ckpts/sam_vit_h_4b8939.pth"
+    sam_ckpt_path="checkpoints/sam1/sam_vit_h_4b8939.pth"
     sam = sam_model_registry["vit_h"](checkpoint=sam_ckpt_path).to('cuda')
     mask_generator = SamAutomaticMaskGenerator(
         model=sam,
         points_per_side=32,
-        pred_iou_thresh=0.7,
-        box_nms_thresh=0.7,
-        stability_score_thresh=0.85,
+        pred_iou_thresh=args.pred_iou_thresh, 
+        box_nms_thresh=args.box_nms_thresh, 
+        stability_score_thresh=args.stability_score_thresh, 
         crop_n_layers=1,
         crop_n_points_downscale_factor=1,
         min_mask_region_area=100,
@@ -417,15 +428,16 @@ if __name__ == '__main__':
 
     prompts_loader = Prompts(bs=args.batch_size)  # hold all the clicks we add for visualization
     while True:
-        print(f"frame: {now_frame}")
+        logger.info(f"frame: {now_frame}")
 
         sum_id = prompts_loader.get_obj_num()
         image_path = os.path.join(video_dir,frame_names[now_frame])
         image = cv2.imread(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         masks_default, masks_s, masks_m, masks_l = mask_generator.generate(image)
-        masks_default, masks_s, masks_m, masks_l = \
-            masks_update(masks_default, masks_s, masks_m, masks_l, iou_thr=0.8, score_thr=0.7, inner_thr=0.5)
+        if args.postnms:
+            masks_default, masks_s, masks_m, masks_l = \
+                masks_update(masks_default, masks_s, masks_m, masks_l, iou_thr=0.8, score_thr=0.7, inner_thr=0.5)
         if level == 'default':
             masks = [mask for mask in masks_default]
             other_masks = [mask for mask in masks_l] + [mask for mask in masks_m] + [mask for mask in masks_s] 
@@ -447,6 +459,20 @@ if __name__ == '__main__':
 
             save_masks([masks[ann_obj_id]['segmentation'] for ann_obj_id in ann_obj_id_list],now_frame,os.path.join(base_dir,level,'mask_each_frame-sam1'))
             
+            if os.getenv("ONLY_STATISTIC","f") == 't':
+                width = masks[0]['segmentation'].shape[1]
+                height = masks[0]['segmentation'].shape[0]
+                all_mask = np.zeros((height,width))
+                for ann_obj_id in ann_obj_id_list:
+                    all_mask = np.logical_or(all_mask,masks[ann_obj_id]['segmentation'])
+                
+                # import ipdb; ipdb.set_trace()
+                img = Image.fromarray((all_mask * 255).astype(np.uint8)).convert("RGB")
+                img.save(os.path.join(base_dir,level,'mask_each_frame-sam1','all.png'))
+                logger.info(f"num:{len(ann_obj_id_list)}")
+                logger.info(f"no mask ratio:{all_mask.sum()/(width*height)}")
+                exit()
+
             for ann_obj_id in tqdm(ann_obj_id_list):
                 seg = masks[ann_obj_id]['segmentation']
                 prompts_loader.add(ann_obj_id,0,seg)
@@ -454,7 +480,7 @@ if __name__ == '__main__':
         else:  
             save_masks([mask['segmentation'] for mask in masks],now_frame,os.path.join(base_dir,level,'mask_each_frame-sam1'))
             new_mask_list = search_new_obj(masks_from_prev, masks, other_masks,mask_ratio_thresh)
-            print(f"number of new obj: {len(new_mask_list)}")
+            logger.info(f"number of new obj: {len(new_mask_list)}")
 
             for id,mask in enumerate(masks_from_prev):
                 if mask.sum() == 0:
@@ -465,7 +491,7 @@ if __name__ == '__main__':
                 new_mask = new_mask_list[i]['segmentation']
                 prompts_loader.add(sum_id+i,now_frame,new_mask)
 
-        print(f"obj num: {prompts_loader.get_obj_num()}")
+        logger.info(f"obj num: {prompts_loader.get_obj_num()}")
 
         if now_frame==0 or len(new_mask_list)!=0:
             video_segments = get_video_segments(prompts_loader,predictor,inference_state)
@@ -499,7 +525,7 @@ if __name__ == '__main__':
             no_mask_ratio = cal_no_mask_area_ratio(out_mask_list)
             if now_frame == out_frame_idx:
                 mask_ratio_thresh = no_mask_ratio
-                print(f"mask_ratio_thresh: {mask_ratio_thresh}")
+                logger.info(f"mask_ratio_thresh: {mask_ratio_thresh}")
 
             save_masks(out_mask_list, out_frame_idx,os.path.join(save_dir,f"now_frame_{now_frame}"))
             save_masks_npy(out_mask_list, out_frame_idx,os.path.join(save_dir,f"now_frame_{now_frame}"))
@@ -512,18 +538,18 @@ if __name__ == '__main__':
             if no_mask_ratio > mask_ratio_thresh + 0.01 and out_frame_idx > now_frame:
                 masks_from_prev = out_mask_list
                 max_area_no_mask = (no_mask_ratio, out_frame_idx)
-                print(max_area_no_mask)
+                logger.info(max_area_no_mask)
                 # mask_ratio_thresh = no_mask_ratio
                 break
         if max_area_no_mask[1] == -1:
             break
-        print("max_area_no_mask:", max_area_no_mask)
+        logger.info("max_area_no_mask:", max_area_no_mask)
         now_frame = max_area_no_mask[1]
 
 
     ###### Final output ######
     save_dir = os.path.join(base_dir,level,"final-output")
-    video_segments = get_video_segments(prompts_loader,predictor,inference_state)
+    video_segments = get_video_segments(prompts_loader,predictor,inference_state,final_output=True)
     for out_frame_idx in tqdm(range(0, len(frame_names), 1)):
         out_mask_list = []
         for out_obj_id, out_mask in video_segments[out_frame_idx].items():
@@ -534,7 +560,7 @@ if __name__ == '__main__':
         ax.imshow(Image.open(img_path))
 
         no_mask_ratio = cal_no_mask_area_ratio(out_mask_list)
-        print(no_mask_ratio)
+        logger.info(no_mask_ratio)
 
         save_masks(out_mask_list, out_frame_idx,save_dir)
         save_masks_npy(out_mask_list, out_frame_idx,save_dir)
