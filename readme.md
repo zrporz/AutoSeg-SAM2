@@ -13,11 +13,14 @@ https://github.com/user-attachments/assets/1135813a-6d21-4dde-ab37-46bde32bd971
 
 Our method detects segmentations in the scene every certain number of frames, so it can identify potential new objects in the scene
 
-https://github.com/user-attachments/assets/0b3039a9-b546-40a7-8051-f7b28099b477
+https://github.com/user-attachments/assets/12fc2c3f-b915-4f58-a492-fc74bbc31e52
 
-https://github.com/user-attachments/assets/1ca3d6cc-2ece-473b-85ef-b412260af383
 
-https://github.com/user-attachments/assets/ee21f192-4749-4084-926c-9574e0676336
+https://github.com/user-attachments/assets/f080aab6-12a6-461b-8618-cc25bcf67a9b
+
+
+https://github.com/user-attachments/assets/ef45b7ee-4d89-4096-87d7-24c273f9dc6e
+
 
 ## Environment Setup
 
