@@ -3,15 +3,6 @@ This is an automatic full segmentation  tool based on [Segment-Anything-2](https
 
 
 ## Demo
-https://github.com/user-attachments/assets/cfc71c45-7d12-410a-8668-f290c260511e
-
-
-https://github.com/user-attachments/assets/cb942b7a-1960-41e7-8143-71d37fab89b1
-
-https://github.com/user-attachments/assets/1135813a-6d21-4dde-ab37-46bde32bd971
-
-
-Our method detects segmentations in the scene every certain number of frames, so it can identify potential new objects in the scene
 
 https://github.com/user-attachments/assets/12fc2c3f-b915-4f58-a492-fc74bbc31e52
 
