@@ -54,4 +54,6 @@ Please organize your video data as follows
 or you can use our demo datasets [chickenchicken](https://drive.google.com/file/d/10K_ePOMTjgQhWo1EXbM5aX7IU1EKvsrv/view?usp=sharing) and put it under `videos/chickenchicken`, then run
 ```bash
 bash scripts/chickenchicken.sh
+# or fast strategy
+bash scripts/chickenchicken_fast.sh
 ```
